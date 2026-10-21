@@ -1,11 +1,39 @@
 {-# LANGUAGE LambdaCase #-}
 
 {-
-The center of a char
- 1234
-1┌──┐
-2│  │
-3└──┘
+version 2026-10-21
+
+# Usage:
+
+Copy this file to the tex path.
+The compiler must be able to find runghc in PATH.
+VerbatimOut preserves the ASCII input; the input pipe reads the script's stdout.
+
+## Preamble:
+
+```
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+\usepackage{fancyvrb}
+
+\newenvironment{asciitikz}{%
+  \VerbatimEnvironment
+  \begin{VerbatimOut}{\jobname-ascii.txt}%
+}{%
+  \end{VerbatimOut}%
+  \input{|"runghc ascii2tikz.hs < \jobname-ascii.txt"}%
+}
+```
+
+## Use in document:
+
+```
+\begin{asciitikz}
+┌───────────┐
+│hello world│
+└───────────┘
+\end{asciitikz}
+```
 -}
 
 import Data.Char (isSpace)
@@ -15,7 +43,9 @@ import Data.Ratio (denominator, numerator)
 import Prelude hiding (Left, Right)
 
 main :: IO ()
-main = interact (tikZToString . simplifyTikZ . diagramToTikZ . diagramMatrixToDiagram . stringToDiagramMatrix)
+main =
+    interact
+        (tikZToString . simplifyTikZ . diagramToTikZ . diagramMatrixToDiagram . stringToDiagramMatrix)
 
 data Direction = Right | Up | Left | Down
     deriving (Eq, Show)
@@ -151,11 +181,14 @@ simplifyRectangles diagram = Map.elems result
     candidates =
         [ (top, left, right, bottom, p, s)
         | (top, p, q) <- segments
-        , y p == y q, x p < x q
+        , y p == y q
+        , x p < x q
         , (left, r) <- Map.findWithDefault [] p starts
-        , x p == x r, y p < y r
+        , x p == x r
+        , y p < y r
         , (right, s) <- Map.findWithDefault [] q starts
-        , x s == x q, y s == y r
+        , x s == x q
+        , y s == y r
         , (bottom, t) <- Map.findWithDefault [] r starts
         , t == s
         ]
@@ -176,8 +209,10 @@ simplifyRectangles diagram = Map.elems result
 simplifyPolylines :: TikZ -> TikZ
 simplifyPolylines diagram = merge diagram
   where
-    degrees = Map.fromListWith (+)
-        [(p, 1 :: Int) | TikZLine points@(_ : _ : _) <- diagram, p <- [head points, last points]]
+    degrees =
+        Map.fromListWith
+            (+)
+            [(p, 1 :: Int) | TikZLine points@(_ : _ : _) <- diagram, p <- [head points, last points]]
     merge [] = []
     merge (TikZLine points@(_ : _ : _) : rest) = extend points rest
     merge (item : rest) = item : merge rest
@@ -198,21 +233,19 @@ simplifyPolylines diagram = merge diagram
         | otherwise = Nothing
     canJoin p q = p == q && Map.lookup p degrees == Just 2
 
+-- The host document must load TikZ and its arrows.meta library.
 -- The negative y scale preserves row order. Text keeps $ available for LaTeX math.
 tikZToString :: TikZ -> String
-tikZToString diagram = unlines $
-    [ "\\documentclass[tikz,border=2pt]{standalone}"
-    , "\\usepackage[UTF8,fontset=fandol]{ctex}"
-    , "\\usetikzlibrary{arrows.meta}"
-    , "\\begin{document}"
-    , "\\begin{tikzpicture}["
-    , "  x=0.525em,y=-1.2em,font=\\ttfamily,line cap=round,line join=round,"
-    , "  diagram arrow/.style={-{Stealth[length=3pt,width=4pt]}},"
-    , "  every node/.style={anchor=north west,align=left,inner sep=0pt,outer sep=0pt}"
-    , "]"
-    ]
-        ++ map render diagram
-        ++ ["\\end{tikzpicture}", "\\end{document}"]
+tikZToString diagram =
+    unlines $
+        [ "\\begin{tikzpicture}["
+        , "  x=0.525em,y=-1.2em,font=\\ttfamily,line cap=round,line join=round,"
+        , "  diagram arrow/.style={-{Stealth[length=3pt,width=4pt]}},"
+        , "  every node/.style={anchor=north west,align=left,inner sep=0pt,outer sep=0pt}"
+        , "]"
+        ]
+            ++ map render diagram
+            ++ ["\\end{tikzpicture}"]
   where
     number value =
         let units = halfUnits value
@@ -229,7 +262,9 @@ tikZToString diagram = unlines $
         TikZText p content ->
             "\\node at "
                 ++ coordinate p
-                ++ " {\\strut " ++ concatMap escape content ++ "};"
+                ++ " {\\strut "
+                ++ concatMap escape content
+                ++ "};"
     renderPath command points = case points of
         _ : _ : _ -> command ++ intercalate " -- " (map coordinate points) ++ ";"
         _ -> ""
@@ -291,7 +326,8 @@ diagramMatrixToDiagram matrix =
         mergeGroup = mergeRuns join . sortOn (along horizontal . position) . map normalize
         join (PositionDiagramElement p (Stroke delta)) (PositionDiagramElement q (Stroke nextDelta))
             | along horizontal q <= along horizontal (p + delta) =
-                let end = if along horizontal (q + nextDelta) > along horizontal (p + delta)
+                let end =
+                        if along horizontal (q + nextDelta) > along horizontal (p + delta)
                             then q + nextDelta
                             else p + delta
                  in Just (PositionDiagramElement p (Stroke (end - p)))
