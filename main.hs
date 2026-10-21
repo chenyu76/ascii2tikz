@@ -9,13 +9,13 @@ The center of a char
 -}
 
 import Data.Char (isSpace)
-import Data.List (nub, partition, sortOn, transpose)
+import Data.List (foldl', intercalate, nub, partition, sortOn, transpose)
 import qualified Data.Map.Strict as Map
 import Data.Ratio (denominator, numerator)
 import Prelude hiding (Left, Right)
 
 main :: IO ()
-main = interact (diagramToTikZ . diagramMatrixToDiagram . stringToDiagramMatrix)
+main = interact (tikZToString . simplifyTikZ . diagramToTikZ . diagramMatrixToDiagram . stringToDiagramMatrix)
 
 data Direction = Right | Up | Left | Down
     deriving (Eq, Show)
@@ -37,6 +37,8 @@ directionToVector2 = \case
     Left -> Vector2 (-1) 0
     Right -> Vector2 1 0
 
+-- PlusHalf n means n + 1/2, including when n is negative.
+-- Multiplication and division fail when the exact result is not a half-integer.
 data HalfInteger = Whole Integer | PlusHalf Integer
     deriving (Eq, Show)
 
@@ -77,8 +79,9 @@ data Vector2 = Vector2
     { x :: HalfInteger
     , y :: HalfInteger
     }
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 
+-- Arithmetic is componentwise; scalar literals are broadcast to both components.
 instance Num Vector2 where
     Vector2 x1 y1 + Vector2 x2 y2 = Vector2 (x1 + x2) (y1 + y2)
     Vector2 x1 y1 - Vector2 x2 y2 = Vector2 (x1 - x2) (y1 - y2)
@@ -92,6 +95,8 @@ instance Fractional Vector2 where
     Vector2 x1 y1 / Vector2 x2 y2 = Vector2 (x1 / x2) (y1 / y2)
     fromRational n = Vector2 (fromRational n) (fromRational n)
 
+-- Positions are cell centers, with x increasing rightward and y downward.
+-- Stroke stores an endpoint displacement; Text starts at its first character.
 data DiagramElement
     = Stroke Vector2
     | Arrow Direction
@@ -108,13 +113,103 @@ type Diagram = [DiagramElement]
 
 type PositionDiagram = [PositionDiagramElement]
 
-diagramToTikZ :: PositionDiagram -> String
-diagramToTikZ diagram = unlines $
+-- All points are absolute coordinates. Rectangle arguments are opposite corners.
+-- Line and arrow paths need at least two points; shorter paths render nothing.
+data TikZElement
+    = TikZRectangle Vector2 Vector2
+    | TikZLine [Vector2]
+    | TikZArrow [Vector2]
+    | TikZText Vector2 String
+    deriving (Eq, Show)
+
+type TikZ = [TikZElement]
+
+-- Matrix conversion produces axis-aligned strokes directed rightward or downward.
+-- Text moves from its first cell center to the top-left corner of that cell.
+diagramToTikZ :: PositionDiagram -> TikZ
+diagramToTikZ = map convert
+  where
+    convert (PositionDiagramElement p item) = case item of
+        Stroke delta -> TikZLine [p, p + delta]
+        Arrow direction -> TikZArrow [p - directionToVector2 direction / 2, p]
+        Text content -> TikZText (p - Vector2 (1 / 2) (1 / 2)) content
+
+-- Rectangle recognition must precede polyline joining, which consumes straight edges.
+simplifyTikZ :: TikZ -> TikZ
+simplifyTikZ = simplifyPolylines . simplifyRectangles
+
+-- Only two-point lines directed rightward or downward are rectangle candidates.
+-- Matrix conversion already merges collinear strokes, so each side must be one line.
+-- Find perpendicular sides sharing a start, then two sides ending at one corner.
+-- Each line is consumed at most once; shared sides are not duplicated.
+simplifyRectangles :: TikZ -> TikZ
+simplifyRectangles diagram = Map.elems result
+  where
+    indexed = zip [0 :: Int ..] diagram
+    segments = [(i, p, q) | (i, TikZLine [p, q]) <- indexed]
+    starts = Map.fromListWith (++) [(p, [(i, q)]) | (i, p, q) <- segments]
+    candidates =
+        [ (top, left, right, bottom, p, s)
+        | (top, p, q) <- segments
+        , y p == y q, x p < x q
+        , (left, r) <- Map.findWithDefault [] p starts
+        , x p == x r, y p < y r
+        , (right, s) <- Map.findWithDefault [] q starts
+        , x s == x q, y s == y r
+        , (bottom, t) <- Map.findWithDefault [] r starts
+        , t == s
+        ]
+    (result, _) = foldl' replace (Map.fromList indexed, Map.fromList [(i, ()) | (i, _, _) <- segments]) candidates
+    replace state@(items, available) (top, left, right, bottom, p, s)
+        | all (`Map.member` available) edges =
+            ( Map.insert top (TikZRectangle p s) (foldr Map.delete items edges)
+            , foldr Map.delete available edges
+            )
+        | otherwise = state
+      where
+        edges = [top, left, right, bottom]
+
+-- Only plain lines are joined; arrows, rectangles and text retain their meaning.
+-- Connections use exact endpoint equality, without splitting at interior crossings.
+-- Reverse paths as needed: canonical right/down strokes may meet at either end.
+-- Join only endpoints incident to exactly two paths, leaving branch choices explicit.
+simplifyPolylines :: TikZ -> TikZ
+simplifyPolylines diagram = merge diagram
+  where
+    degrees = Map.fromListWith (+)
+        [(p, 1 :: Int) | TikZLine points@(_ : _ : _) <- diagram, p <- [head points, last points]]
+    merge [] = []
+    merge (TikZLine points@(_ : _ : _) : rest) = extend points rest
+    merge (item : rest) = item : merge rest
+    extend points rest = case connected points rest of
+        Just (joined, remaining) -> extend joined remaining
+        Nothing -> TikZLine points : merge rest
+    connected _ [] = Nothing
+    connected points (item : rest) = case item of
+        TikZLine next@(_ : _ : _) | Just joined <- join points next -> Just (joined, rest)
+        _ -> case connected points rest of
+            Just (joined, remaining) -> Just (joined, item : remaining)
+            Nothing -> Nothing
+    join points next
+        | canJoin (last points) (head next) = Just (points ++ tail next)
+        | canJoin (last points) (last next) = Just (points ++ tail (reverse next))
+        | canJoin (head points) (last next) = Just (next ++ tail points)
+        | canJoin (head points) (head next) = Just (reverse points ++ tail next)
+        | otherwise = Nothing
+    canJoin p q = p == q && Map.lookup p degrees == Just 2
+
+-- The negative y scale preserves row order. Text keeps $ available for LaTeX math.
+tikZToString :: TikZ -> String
+tikZToString diagram = unlines $
     [ "\\documentclass[tikz,border=2pt]{standalone}"
     , "\\usepackage[UTF8,fontset=fandol]{ctex}"
     , "\\usetikzlibrary{arrows.meta}"
     , "\\begin{document}"
-    , "\\begin{tikzpicture}[x=0.525em,y=-1.2em,font=\\ttfamily,line cap=round,line join=round]"
+    , "\\begin{tikzpicture}["
+    , "  x=0.525em,y=-1.2em,font=\\ttfamily,line cap=round,line join=round,"
+    , "  diagram arrow/.style={-{Stealth[length=3pt,width=4pt]}},"
+    , "  every node/.style={anchor=north west,align=left,inner sep=0pt,outer sep=0pt}"
+    , "]"
     ]
         ++ map render diagram
         ++ ["\\end{tikzpicture}", "\\end{document}"]
@@ -126,21 +221,23 @@ diagramToTikZ diagram = unlines $
                 ++ show whole
                 ++ (if half == 0 then "" else ".5")
     coordinate (Vector2 px py) = "(" ++ number px ++ "," ++ number py ++ ")"
-    render (PositionDiagramElement p item) = case item of
-        Stroke delta -> "\\draw " ++ coordinate p ++ " -- " ++ coordinate (p + delta) ++ ";"
-        Arrow direction ->
-            "\\draw[-{Stealth[length=3pt,width=4pt]}] "
-                ++ coordinate (p - directionToVector2 direction / 2)
-                ++ " -- " ++ coordinate p ++ ";"
-        Text content ->
-            "\\node[anchor=north west,align=left,inner sep=0pt,outer sep=0pt] at "
-                ++ coordinate (p - Vector2 (1 / 2) (1 / 2))
+    render = \case
+        TikZRectangle start end ->
+            "\\draw " ++ coordinate start ++ " rectangle " ++ coordinate end ++ ";"
+        TikZLine points -> renderPath "\\draw " points
+        TikZArrow points -> renderPath "\\draw[diagram arrow] " points
+        TikZText p content ->
+            "\\node at "
+                ++ coordinate p
                 ++ " {\\strut " ++ concatMap escape content ++ "};"
+    renderPath command points = case points of
+        _ : _ : _ -> command ++ intercalate " -- " (map coordinate points) ++ ";"
+        _ -> ""
     escape = \case
         '\\' -> "\\textbackslash{}"
         '{' -> "\\{"
         '}' -> "\\}"
-        '$' -> "\\$"
+        -- '$' -> "\\$"
         '&' -> "\\&"
         '#' -> "\\#"
         '%' -> "\\%"
@@ -153,6 +250,10 @@ diagramToTikZ diagram = unlines $
         '\r' -> ""
         c -> [c]
 
+-- Input is column-major, with each word stored only in its first occupied cell.
+-- Remaining character cells and whitespace must be empty, as produced by the parser.
+-- Row/column merging normalizes strokes to rightward/downward endpoint displacements.
+-- Text joins across exactly one empty cell, then across consecutive rows at equal x.
 diagramMatrixToDiagram :: [[Diagram]] -> PositionDiagram
 diagramMatrixToDiagram matrix =
     mergeTexts False (mergeStrokes False (mergeTexts True (mergeStrokes True positioned)))
@@ -219,6 +320,7 @@ lineChars =
     , "←─→ "
     ]
 
+-- Entries must match lineChars in both row order and column order.
 lineDiagrams :: [[Diagram]]
 lineDiagrams =
     [ [strokes [Right, Down], strokes [Left, Right, Down], strokes [Left, Down], arrow Up]
@@ -232,6 +334,7 @@ lineDiagrams =
     , [arrow Left, strokes [Left, Right], arrow Right, []]
     ]
   where
+    -- Ordinary strokes reach half a cell toward a neighbor; arrows connect behind the tip.
     strokes = map (Stroke . (/ 2) . directionToVector2)
     arrow direction = [Arrow direction, Stroke (directionToNegVector2 direction / 2)]
 
@@ -245,9 +348,13 @@ lineCharMap =
             , (char, diagram) <- zip chars diagrams
             ]
 
+-- Requires a character present in lineCharMap.
 lineCharToDiagram :: Char -> Diagram
 lineCharToDiagram c = lineCharMap Map.! c
 
+-- Columns are the outer list, rows the inner list; shorter rows are padded with [].
+-- Each Haskell Char occupies one cell; tabs and wide glyphs are not display-width expanded.
+-- A word occupies one Text cell followed by empty placeholder cells for its other characters.
 stringToDiagramMatrix :: String -> [[Diagram]]
 stringToDiagramMatrix str = transpose (map (parse 0) rows)
   where
