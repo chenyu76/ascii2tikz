@@ -1,12 +1,34 @@
 {-# LANGUAGE LambdaCase #-}
 
 {-
-version 2026-10-21
+version 2026-10-25
 
-# Usage:
+# Use in CLI
 
-Copy this file to the tex path.
-The compiler must be able to find runghc in PATH.
+Requires GHC, with runghc available in PATH. Use UTF-8 input.
+Read a diagram from stdin and write a TikZ picture to stdout:
+
+```sh
+runghc ascii2tikz.hs < diagram.txt > diagram.tex
+```
+
+Piped input is also supported:
+
+```sh
+cat diagram.txt | runghc ascii2tikz.hs > diagram.tex
+```
+
+To compile the script into an executable:
+
+```sh
+ghc -O2 ascii2tikz.hs -o ascii2tikz
+./ascii2tikz < diagram.txt > diagram.tex
+```
+
+# Use directly in LaTeX:
+
+Place this script beside the .tex file and compile from that directory.
+The compiler must be able to find runghc in PATH; enable --shell-escape.
 VerbatimOut preserves the ASCII input; the input pipe reads the script's stdout.
 
 ## Preamble:
@@ -16,12 +38,15 @@ VerbatimOut preserves the ASCII input; the input pipe reads the script's stdout.
 \usetikzlibrary{arrows.meta}
 \usepackage{fancyvrb}
 
+\newcounter{asciitikz}
 \newenvironment{asciitikz}{%
   \VerbatimEnvironment
-  \begin{VerbatimOut}{\jobname-ascii.txt}%
+  \stepcounter{asciitikz}%
+  \edef\asciifilename{\jobname-ascii-\arabic{asciitikz}.vrb}%
+  \begin{VerbatimOut}{\asciifilename}%
 }{%
   \end{VerbatimOut}%
-  \input{|"runghc ascii2tikz.hs < \jobname-ascii.txt"}%
+  \input{|"runghc ascii2tikz.hs < \asciifilename"}%
 }
 ```
 
@@ -34,6 +59,30 @@ VerbatimOut preserves the ASCII input; the input pipe reads the script's stdout.
 └───────────┘
 \end{asciitikz}
 ```
+
+## Compile:
+
+```sh
+xelatex -shell-escape example.tex
+```
+
+With this repository's .latexmkrc, XeLaTeX and shell escape are already configured:
+
+```sh
+latexmk beamer-example.tex
+```
+
+## Tips:
+
+- In Beamer, frames containing asciitikz must use \begin{frame}[fragile].
+  See beamer-example.tex for a complete example.
+
+- If you format LaTeX files with tex-fmt, add the following to tex-fmt.toml
+  in the project directory to preserve the contents of asciitikz environments:
+
+  ```toml
+  verbatims = ["asciitikz"]
+  ```
 -}
 
 import Data.Char (isSpace)
@@ -70,7 +119,15 @@ directionToVector2 = \case
 -- PlusHalf n means n + 1/2, including when n is negative.
 -- Multiplication and division fail when the exact result is not a half-integer.
 data HalfInteger = Whole Integer | PlusHalf Integer
-    deriving (Eq, Show)
+    deriving (Eq)
+
+instance Show HalfInteger where
+    show value =
+        let units = halfUnits value
+            (whole, half) = divMod (abs units) 2
+         in (if units < 0 then "-" else "")
+                ++ show whole
+                ++ (if half == 0 then "" else ".5")
 
 halfUnits :: HalfInteger -> Integer
 halfUnits (Whole n) = 2 * n
@@ -247,13 +304,7 @@ tikZToString diagram =
             ++ map render diagram
             ++ ["\\end{tikzpicture}"]
   where
-    number value =
-        let units = halfUnits value
-            (whole, half) = divMod (abs units) 2
-         in (if units < 0 then "-" else "")
-                ++ show whole
-                ++ (if half == 0 then "" else ".5")
-    coordinate (Vector2 px py) = "(" ++ number px ++ "," ++ number py ++ ")"
+    coordinate (Vector2 px py) = "(" ++ show px ++ "," ++ show py ++ ")"
     render = \case
         TikZRectangle start end ->
             "\\draw " ++ coordinate start ++ " rectangle " ++ coordinate end ++ ";"
@@ -262,7 +313,7 @@ tikZToString diagram =
         TikZText p content ->
             "\\node at "
                 ++ coordinate p
-                ++ " {\\strut "
+                ++ " {"
                 ++ concatMap escape content
                 ++ "};"
     renderPath command points = case points of
@@ -281,7 +332,7 @@ tikZToString diagram =
         '~' -> "\\textasciitilde{}"
         ' ' -> "~"
         '\t' -> "\\quad{}"
-        '\n' -> "\\\\{}\\strut "
+        '\n' -> "\\\\{} "
         '\r' -> ""
         c -> [c]
 
