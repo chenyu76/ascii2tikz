@@ -36,4 +36,98 @@ NOTE: This package only works on Linux now.
    xelatex -shell-escape beamer-example.tex
    ```
 
+## Usage
+
+### Use in CLI
+
+Requires GHC, with runghc available in PATH.
+Read a diagram from stdin and write a TikZ picture to stdout:
+
+```sh
+runghc ascii2tikz.hs < diagram.txt > diagram.tex
+```
+
+An optional argument is appended verbatim to the tikzpicture options:
+
+```sh
+runghc ascii2tikz.hs 'scale=1.5,draw=blue' < diagram.txt > diagram.tex
+```
+
+Piped input is also supported:
+
+```sh
+cat diagram.txt | runghc ascii2tikz.hs > diagram.tex
+```
+
+To compile the script into an executable:
+
+```sh
+ghc -O2 ascii2tikz.hs -o ascii2tikz
+```
+
+### Use directly in LaTeX:
+
+First, Place `ascii2tikz.hs` and `ascii2tikz.sty` beside the .tex file,
+or add this repository as a submodule. The package calls the executable beside
+its own `.sty` file.
+
+#### In preamble:
+
+add
+
+```latex
+\usepackage{ascii2tikz}
+```
+
+to the preamble.
+
+For a submodule stored in `ascii2tikz/`:
+
+```latex
+\usepackage{ascii2tikz/ascii2tikz}
+```
+
+#### Use in document:
+
+```latex
+\begin{asciitikz}
+┌───────────┐
+│hello world│
+└───────────┘
+\end{asciitikz}
+```
+
+Pass extra TikZ options through the environment's optional argument:
+
+```latex
+\begin{asciitikz}[scale=1.5, transform shape, draw=blue]
+┌───────────┐
+│hello world│
+└───────────┘
+\end{asciitikz}
+```
+
+#### Compile:
+
+Loading `ascii2tikz.sty` builds the executable beside the `.sty` file.
+GHC must be in PATH. Enable shell escape:
+
+```sh
+xelatex -shell-escape main.tex
+```
+
+This repository's .latexmkrc already selects XeLaTeX and enables shell escape,
+so the bundled example can be compiled with `latexmk beamer-example.tex`.
+
+#### Tips:
+
+- In Beamer, frames containing asciitikz must use `\begin{frame}[fragile]`.
+
+- If you format LaTeX files with tex-fmt, add the following to tex-fmt.toml
+  in the project directory to preserve the contents of asciitikz environments:
+
+  ```toml
+  verbatims = ["asciitikz"]
+  ```
+
 Check [ascii2tikz.hs](./ascii2tikz.hs) for more information.
