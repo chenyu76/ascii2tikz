@@ -22,14 +22,13 @@ To compile the script into an executable:
 
 ```sh
 ghc -O2 ascii2tikz.hs -o ascii2tikz
-./ascii2tikz < diagram.txt > diagram.tex
 ```
 
 # Use directly in LaTeX:
 
-Place this script beside the .tex file and compile from that directory.
-The compiler must be able to find runghc in PATH; enable --shell-escape.
-VerbatimOut preserves the ASCII input; the input pipe reads the script's stdout.
+Place this source and .latexmkrc beside the .tex file and compile from that directory.
+latexmk builds ./ascii2tikz with GHC before running LaTeX; GHC must be in PATH.
+VerbatimOut preserves the ASCII input; the input pipe reads the executable's stdout.
 
 ## Preamble:
 
@@ -46,7 +45,7 @@ VerbatimOut preserves the ASCII input; the input pipe reads the script's stdout.
   \begin{VerbatimOut}{\asciifilename}%
 }{%
   \end{VerbatimOut}%
-  \input{|"runghc ascii2tikz.hs < \asciifilename"}%
+  \input{|"./ascii2tikz < \asciifilename"}%
 }
 ```
 
@@ -62,15 +61,14 @@ VerbatimOut preserves the ASCII input; the input pipe reads the script's stdout.
 
 ## Compile:
 
-```sh
-xelatex -shell-escape example.tex
-```
-
-With this repository's .latexmkrc, XeLaTeX and shell escape are already configured:
+With this repository's .latexmkrc, the converter is built automatically and
+XeLaTeX and shell escape are already configured:
 
 ```sh
 latexmk beamer-example.tex
 ```
+
+You have to build the executable manually if you don't use latexmk.
 
 ## Tips:
 
@@ -313,7 +311,7 @@ tikZToString diagram =
         TikZText p content ->
             "\\node at "
                 ++ coordinate p
-                ++ " {"
+                ++ " {\\strut "
                 ++ concatMap escape content
                 ++ "};"
     renderPath command points = case points of
@@ -332,7 +330,7 @@ tikZToString diagram =
         '~' -> "\\textasciitilde{}"
         ' ' -> "~"
         '\t' -> "\\quad{}"
-        '\n' -> "\\\\{} "
+        '\n' -> "\\\\{}\\strut "
         '\r' -> ""
         c -> [c]
 
