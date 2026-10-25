@@ -1,0 +1,37 @@
+\documentclass[aspectratio=169]{beamer}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+\usepackage{fancyvrb}
+
+\setbeamertemplate{navigation symbols}{}
+\newcounter{asciitikz}
+\newenvironment{asciitikz}{%
+  \VerbatimEnvironment
+  \stepcounter{asciitikz}%
+  \edef\asciifilename{\jobname-ascii-\arabic{asciitikz}.vrb}%
+  \begin{VerbatimOut}{\asciifilename}%
+  }{%
+  \end{VerbatimOut}%
+  \input{|"runghc ascii2tikz.hs < \asciifilename"}%
+}
+
+\title{Draw with ASCII in LaTeX}
+\author{}
+\date{}
+
+\begin{document}
+
+\begin{frame}[fragile]{ASCII 2 TikZ}
+  \centering
+  \begin{asciitikz}
+    ┌─────────┐   ┌─────────┐   ┌────────┐
+    │  Input  │──→│ Process │──→│ Output │
+    └─────────┘   └─────────┘   └────────┘
+  \end{asciitikz}
+
+  \medskip
+  Draw ASCII diagram in the \texttt{asciitikz} environment, and TikZ will be
+  generated automatically.
+\end{frame}
+
+\end{document}
