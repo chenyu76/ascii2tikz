@@ -313,11 +313,13 @@ simplifyPolylines diagram = merge diagram
 -- The host document must load TikZ and its arrows.meta library.
 -- The negative y scale preserves row order. Text keeps $ available for LaTeX math.
 -- Extra options are raw TikZ keys appended after the defaults without validation.
+-- Selecting a picture font measures M and its baseline spacing for the grid.
 tikZToString :: String -> TikZ -> String
 tikZToString options diagram =
     unlines $
         [ "\\begin{tikzpicture}["
-        , "  x=0.525em,y=-1.2em,font=\\ttfamily,line cap=round,line join=round,"
+        , "  font/.append code={#1\\tikzset{x={width(\"M\")},y=-\\baselineskip}},"
+        , "  font=\\ttfamily,line cap=round,line join=round,"
         , "  diagram arrow/.style={-{Stealth[length=3pt,width=4pt]}},"
         , "  every node/.style={anchor=north west,align=left,inner sep=0pt,outer sep=0pt}"
             ++ (if null options then "" else ",")
