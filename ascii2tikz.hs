@@ -230,12 +230,15 @@ type TikZ = [TikZElement]
 
 -- Matrix conversion produces axis-aligned strokes directed rightward or downward.
 -- Text moves from its first cell center to the top-left corner of that cell.
+-- Arrow tips lie half a cell forward, with shafts starting half a cell behind.
 diagramToTikZ :: PositionDiagram -> TikZ
 diagramToTikZ = map convert
   where
     convert (PositionDiagramElement p item) = case item of
         Stroke delta -> TikZLine [p, p + delta]
-        Arrow direction -> TikZArrow [p - directionToVector2 direction / 2, p]
+        Arrow direction ->
+            let halfStep = directionToVector2 direction / 2
+             in TikZArrow [p - halfStep, p + halfStep]
         Text content -> TikZText (p - Vector2 (1 / 2) (1 / 2)) content
 
 -- Rectangle recognition must precede polyline joining, which consumes straight edges.
@@ -441,9 +444,10 @@ lineDiagrams =
     , [arrow Left, strokes [Left, Right], arrow Right, []]
     ]
   where
-    -- Ordinary strokes reach half a cell toward a neighbor; arrows connect behind the tip.
+    -- Ordinary strokes reach halfway from the cell center toward a neighbor.
+    -- Arrow conversion draws the full cell-width shaft; no additional Stroke is needed.
     strokes = map (Stroke . (/ 2) . directionToVector2)
-    arrow direction = [Arrow direction, Stroke (directionToNegVector2 direction / 2)]
+    arrow direction = [Arrow direction]
 
 lineCharMap :: Map.Map Char Diagram
 lineCharMap =
