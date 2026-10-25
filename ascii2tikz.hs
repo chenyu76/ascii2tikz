@@ -12,6 +12,12 @@ Read a diagram from stdin and write a TikZ picture to stdout:
 runghc ascii2tikz.hs < diagram.txt > diagram.tex
 ```
 
+An optional argument is appended verbatim to the tikzpicture options:
+
+```sh
+runghc ascii2tikz.hs 'scale=1.5,draw=blue' < diagram.txt > diagram.tex
+```
+
 Piped input is also supported:
 
 ```sh
@@ -52,6 +58,18 @@ For a submodule stored in ascii2tikz/:
 \end{asciitikz}
 ```
 
+Pass extra TikZ options through the environment's optional argument:
+
+```latex
+\begin{asciitikz}[scale=1.5, transform shape, draw=blue]
+┌───────────┐
+│hello world│
+└───────────┘
+\end{asciitikz}
+```
+
+These options follow the defaults, so they can override them.
+
 ## Compile:
 
 Loading ascii2tikz.sty builds the executable beside the .sty file.
@@ -81,12 +99,19 @@ import Data.Char (isSpace)
 import Data.List (foldl', intercalate, nub, partition, sortOn, transpose)
 import qualified Data.Map.Strict as Map
 import Data.Ratio (denominator, numerator)
+import System.Environment (getArgs)
+import System.Exit (die)
 import Prelude hiding (Left, Right)
 
 main :: IO ()
-main =
+main = do
+    args <- getArgs
+    options <- case args of
+        [] -> pure ""
+        [value] -> pure value
+        _ -> die "Usage: ascii2tikz [TIKZ_OPTIONS]"
     interact
-        (tikZToString . simplifyTikZ . diagramToTikZ . diagramMatrixToDiagram . stringToDiagramMatrix)
+        (tikZToString options . simplifyTikZ . diagramToTikZ . diagramMatrixToDiagram . stringToDiagramMatrix)
 
 data Direction = Right | Up | Left | Down
     deriving (Eq, Show)
@@ -284,15 +309,18 @@ simplifyPolylines diagram = merge diagram
 
 -- The host document must load TikZ and its arrows.meta library.
 -- The negative y scale preserves row order. Text keeps $ available for LaTeX math.
-tikZToString :: TikZ -> String
-tikZToString diagram =
+-- Extra options are raw TikZ keys appended after the defaults without validation.
+tikZToString :: String -> TikZ -> String
+tikZToString options diagram =
     unlines $
         [ "\\begin{tikzpicture}["
         , "  x=0.525em,y=-1.2em,font=\\ttfamily,line cap=round,line join=round,"
         , "  diagram arrow/.style={-{Stealth[length=3pt,width=4pt]}},"
         , "  every node/.style={anchor=north west,align=left,inner sep=0pt,outer sep=0pt}"
-        , "]"
+            ++ (if null options then "" else ",")
         ]
+            ++ [options | not (null options)]
+            ++ ["]"]
             ++ map render diagram
             ++ ["\\end{tikzpicture}"]
   where

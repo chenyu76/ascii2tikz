@@ -40,16 +40,39 @@
 \fi
 
 % register the environment
+% Preserve TeX commands as text and escape single quotes for the shell argument.
+% Encode double quotes and dollars to bypass TeX filename parsing and Kpathsea expansion.
+\ExplSyntaxOn
+\cs_new_protected:Npn \asciitikz@setoptions #1
+  {
+    \tl_set:Nx \l_tmpa_tl { \tl_to_str:n {#1} }
+    \exp_args:NNnx \tl_replace_all:Nnn \l_tmpa_tl { ' } { '\c_backslash_str'' }
+    \exp_args:NNnx \tl_replace_all:Nnn \l_tmpa_tl { " } { '`printf~'\c_backslash_str042'`' }
+    \exp_args:NNxx \tl_replace_all:Nnn \l_tmpa_tl { \c_dollar_str } { '`printf~'\c_backslash_str044'`' }
+    \cs_set:Npx \asciitikz@options { \exp_not:V \l_tmpa_tl }
+  }
+\ExplSyntaxOff
+
 \newcounter{asciitikz}
-\newenvironment{asciitikz}{%
-  \VerbatimEnvironment
+% Keep the first newline visible while checking for optional arguments.
+\def\asciitikz@begin{%
+  \catcode`\^^M=\active
+  \@ifnextchar[\asciitikz@beginoptions{\asciitikz@beginoptions[]}%
+}
+\def\asciitikz@beginoptions[#1]{%
+  \catcode`\^^M=5\relax
+  \asciitikz@setoptions{#1}%
   \stepcounter{asciitikz}%
   \edef\asciitikz@filename{\jobname-ascii-\arabic{asciitikz}.vrb}%
   \begin{VerbatimOut}{\asciitikz@filename}%
+}
+\newenvironment{asciitikz}{%
+  \VerbatimEnvironment
+  \asciitikz@begin
 }{%
   \end{VerbatimOut}%
   \ifasciitikz@ready
-    \input{|"'\asciitikz@executable' < '\asciitikz@filename'"}%
+    \input{|"'\asciitikz@executable' '\asciitikz@options' < '\asciitikz@filename'"}%
   \fi
 }
 

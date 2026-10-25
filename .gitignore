@@ -13,4 +13,5 @@
 /ascii2tikz
 /.ghc-build/
 *.hi
+*.png
 *.o
