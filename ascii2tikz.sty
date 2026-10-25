@@ -1,0 +1,56 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{ascii2tikz}[2026/10/25 ASCII diagrams rendered as TikZ]
+
+% Capture the package directory before loading dependencies changes the current path.
+\edef\asciitikz@directory{\@currpath}
+\ifx\asciitikz@directory\@empty
+  \def\asciitikz@directory{./}
+\fi
+\edef\asciitikz@executable{\asciitikz@directory ascii2tikz}
+
+\RequirePackage{tikz}
+\usetikzlibrary{arrows.meta}
+\RequirePackage{fancyvrb}
+\RequirePackage{shellesc}
+
+% Build the binary
+\newif\ifasciitikz@ready
+\newread\asciitikz@build
+\ifnum\ShellEscapeStatus=1
+  % Record the Haskell source as a dependency for latexmk's recorder.
+  \openin\asciitikz@build="\asciitikz@directory ascii2tikz.hs"\relax
+  \closein\asciitikz@build
+  % GHC reuses cached objects; only the status marker is read as TeX input.
+  \begingroup
+    \endlinechar=-1
+    \openin\asciitikz@build=|"if cd '\asciitikz@directory' && ghc -O2 -outputdir .ghc-build ascii2tikz.hs -o ascii2tikz 1>&2; then echo ok; else echo failed; fi"\relax
+    \global\read\asciitikz@build to\asciitikz@buildstatus
+    \closein\asciitikz@build
+  \endgroup
+  \def\asciitikz@success{ok}
+  \ifx\asciitikz@buildstatus\asciitikz@success
+    \asciitikz@readytrue
+  \else
+    \PackageError{ascii2tikz}{Failed to compile ascii2tikz.hs}%
+      {Ensure GHC is in PATH and the package directory is writable. See the compiler output.}
+  \fi
+\else
+  \PackageError{ascii2tikz}{Unrestricted shell escape is required}%
+    {Compile with -shell-escape to build and run the converter.}
+\fi
+
+% register the environment
+\newcounter{asciitikz}
+\newenvironment{asciitikz}{%
+  \VerbatimEnvironment
+  \stepcounter{asciitikz}%
+  \edef\asciitikz@filename{\jobname-ascii-\arabic{asciitikz}.vrb}%
+  \begin{VerbatimOut}{\asciitikz@filename}%
+}{%
+  \end{VerbatimOut}%
+  \ifasciitikz@ready
+    \input{|"'\asciitikz@executable' < '\asciitikz@filename'"}%
+  \fi
+}
+
+\endinput

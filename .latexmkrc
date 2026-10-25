@@ -1,13 +1,3 @@
-# Build the converter before TeX; incremental runs reuse the executable.
-if (-f 'ascii2tikz.hs'
-    && (!-x 'ascii2tikz' || -M 'ascii2tikz.hs' < -M 'ascii2tikz')) {
-    system('ghc', '-O2', '-outputdir', '.ghc-build',
-           'ascii2tikz.hs', '-o', 'ascii2tikz') == 0
-        or die "Failed to compile ascii2tikz.hs\n";
-    # Piped command dependencies are not recorded by TeX's recorder.
-    $go_mode = 3;
-}
-
 # Set default engine to XeLaTeX (pdf_mode = 5)
 $pdf_mode = 5;
 $dvi_mode = 0;

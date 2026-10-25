@@ -1,19 +1,5 @@
 \documentclass[aspectratio=169]{beamer}
-\usepackage{tikz}
-\usetikzlibrary{arrows.meta}
-\usepackage{fancyvrb}
-
-\setbeamertemplate{navigation symbols}{}
-\newcounter{asciitikz}
-\newenvironment{asciitikz}{%
-  \VerbatimEnvironment
-  \stepcounter{asciitikz}%
-  \edef\asciifilename{\jobname-ascii-\arabic{asciitikz}.vrb}%
-  \begin{VerbatimOut}{\asciifilename}%
-  }{%
-  \end{VerbatimOut}%
-  \input{|"./ascii2tikz < \asciifilename"}%
-}
+\usepackage{ascii2tikz}
 
 \title{Draw with ASCII in LaTeX}
 \author{}

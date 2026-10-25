@@ -1,11 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
 
 {-
-version 2026-10-25
+2026-10-25
 
 # Use in CLI
 
-Requires GHC, with runghc available in PATH. Use UTF-8 input.
+Requires GHC, with runghc available in PATH.
 Read a diagram from stdin and write a TikZ picture to stdout:
 
 ```sh
@@ -26,27 +26,20 @@ ghc -O2 ascii2tikz.hs -o ascii2tikz
 
 # Use directly in LaTeX:
 
-Place this source and .latexmkrc beside the .tex file and compile from that directory.
-latexmk builds ./ascii2tikz with GHC before running LaTeX; GHC must be in PATH.
-VerbatimOut preserves the ASCII input; the input pipe reads the executable's stdout.
+Place ascii2tikz.hs and ascii2tikz.sty beside the .tex file,
+or add this repository as a submodule. The package calls the executable beside
+its own .sty file.
 
-## Preamble:
+## In preamble:
 
 ```
-\usepackage{tikz}
-\usetikzlibrary{arrows.meta}
-\usepackage{fancyvrb}
+\usepackage{ascii2tikz}
+```
 
-\newcounter{asciitikz}
-\newenvironment{asciitikz}{%
-  \VerbatimEnvironment
-  \stepcounter{asciitikz}%
-  \edef\asciifilename{\jobname-ascii-\arabic{asciitikz}.vrb}%
-  \begin{VerbatimOut}{\asciifilename}%
-}{%
-  \end{VerbatimOut}%
-  \input{|"./ascii2tikz < \asciifilename"}%
-}
+For a submodule stored in ascii2tikz/:
+
+```latex
+\usepackage{ascii2tikz/ascii2tikz}
 ```
 
 ## Use in document:
@@ -61,14 +54,15 @@ VerbatimOut preserves the ASCII input; the input pipe reads the executable's std
 
 ## Compile:
 
-With this repository's .latexmkrc, the converter is built automatically and
-XeLaTeX and shell escape are already configured:
+Loading ascii2tikz.sty builds the executable beside the .sty file.
+GHC must be in PATH. Enable shell escape:
 
 ```sh
-latexmk beamer-example.tex
+xelatex -shell-escape main.tex
 ```
 
-You have to build the executable manually if you don't use latexmk.
+This repository's .latexmkrc already selects XeLaTeX and enables shell escape,
+so the bundled example can be compiled with `latexmk beamer-example.tex`.
 
 ## Tips:
 
