@@ -21,7 +21,7 @@ For instance, the [LaTeX code](./beamer-example.tex)
 
 now can be compile to the PDF
 
-PLACEHOLDER
+<img width="1920" height="1080" alt="beamer-example" src="https://github.com/user-attachments/assets/2be3339b-3670-40a8-b038-5742bd25cce0" />
 
 The ASCII graph can be drawn with my neovim plugin [draftsman.nvim](https://github.com/chenyu76/draftsman.nvim).
 
