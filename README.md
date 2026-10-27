@@ -14,7 +14,7 @@ For instance, the [LaTeX code](./beamer-example.tex)
   \end{asciitikz}
 
   \medskip
-  Draw ASCII diagram in the \texttt{asciitikz} environment, and TikZ will be
+  Draw an ASCII diagram in the \texttt{asciitikz} environment, and TikZ code will be
   generated automatically.
 \end{frame}
 ```
