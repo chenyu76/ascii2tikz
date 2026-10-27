@@ -38,7 +38,7 @@ directionToVector2 = \case
     Left -> Vector2 (-1) 0
     Right -> Vector2 1 0
 
--- PlusHalf n means n + 1/2, including when n is negative.
+-- PlusHalf n means n + 1/2.
 -- Multiplication and division fail when the exact result is not a half-integer.
 data HalfInteger = Whole Integer | PlusHalf Integer
     deriving (Eq)
@@ -151,9 +151,8 @@ simplifyTikZ :: TikZ -> TikZ
 simplifyTikZ = simplifyPolylines . simplifyRectangles
 
 -- Only two-point lines directed rightward or downward are rectangle candidates.
--- Matrix conversion already merges collinear strokes, so each side must be one line.
+-- diagramMatrixToDiagram already merges collinear strokes, so each side must be one line.
 -- Find perpendicular sides sharing a start, then two sides ending at one corner.
--- Each line is consumed at most once; shared sides are not duplicated.
 simplifyRectangles :: TikZ -> TikZ
 simplifyRectangles diagram = Map.elems result
   where
@@ -185,9 +184,7 @@ simplifyRectangles diagram = Map.elems result
         edges = [top, left, right, bottom]
 
 -- Only plain lines are joined; arrows, rectangles and text retain their meaning.
--- Connections use exact endpoint equality, without splitting at interior crossings.
 -- Reverse paths as needed: canonical right/down strokes may meet at either end.
--- Join only endpoints incident to exactly two paths, leaving branch choices explicit.
 simplifyPolylines :: TikZ -> TikZ
 simplifyPolylines diagram = merge diagram
   where
@@ -216,14 +213,13 @@ simplifyPolylines diagram = merge diagram
     canJoin p q = p == q && Map.lookup p degrees == Just 2
 
 -- The host document must load TikZ and its arrows.meta library.
--- The negative y scale preserves row order. Text keeps $ available for LaTeX math.
--- Extra options are raw TikZ keys appended after the defaults without validation.
--- Selecting a picture font measures M and its baseline spacing for the grid.
 tikZToString :: String -> TikZ -> String
 tikZToString options diagram =
     unlines $
         [ "\\begin{tikzpicture}["
-        , "  font/.append code={#1\\tikzset{x={width(\"M\")},y=-\\baselineskip}},"
+        , -- Selecting a picture font measures M and its baseline spacing for the grid.
+          -- The negative y scale preserves row order.
+          "  font/.append code={#1\\tikzset{x={width(\"M\")},y=-\\baselineskip}},"
         , "  font=\\ttfamily,line cap=round,line join=round,"
         , "  diagram arrow/.style={-{Stealth[length=3pt,width=4pt]}},"
         , "  every node/.style={anchor=north west,align=left,inner sep=0pt,outer sep=0pt}"
@@ -268,9 +264,7 @@ tikZToString options diagram =
         c -> [c]
 
 -- Input is column-major, with each word stored only in its first occupied cell.
--- Remaining character cells and whitespace must be empty, as produced by the parser.
--- Row/column merging normalizes strokes to rightward/downward endpoint displacements.
--- Text joins across exactly one empty cell, then across consecutive rows at equal x.
+-- Remaining character cells and whitespace must be empty, as produced by stringToDiagramMatrix.
 diagramMatrixToDiagram :: [[Diagram]] -> PositionDiagram
 diagramMatrixToDiagram matrix =
     mergeTexts False (mergeStrokes False (mergeTexts True (mergeStrokes True positioned)))
@@ -338,7 +332,6 @@ lineChars =
     , "←─→ "
     ]
 
--- Entries must match lineChars in both row order and column order.
 lineDiagrams :: [[Diagram]]
 lineDiagrams =
     [ [strokes [Right, Down], strokes [Left, Right, Down], strokes [Left, Down], arrow Up]
@@ -353,7 +346,6 @@ lineDiagrams =
     ]
   where
     -- Ordinary strokes reach halfway from the cell center toward a neighbor.
-    -- Arrow conversion draws the full cell-width shaft; no additional Stroke is needed.
     strokes = map (Stroke . (/ 2) . directionToVector2)
     arrow direction = [Arrow direction]
 
@@ -366,10 +358,6 @@ lineCharMap =
             | (chars, diagrams) <- zip lineChars lineDiagrams
             , (char, diagram) <- zip chars diagrams
             ]
-
--- Requires a character present in lineCharMap.
-lineCharToDiagram :: Char -> Diagram
-lineCharToDiagram c = lineCharMap Map.! c
 
 -- Columns are the outer list, rows the inner list; shorter rows are padded with [].
 -- Each Haskell Char occupies one cell; tabs and wide glyphs are not display-width expanded.
